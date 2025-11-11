@@ -1,0 +1,359 @@
+:root {
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #111;
+  background-color: #f4f4f6;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 2rem;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #fdfdfd 0%, #eef1f8 100%);
+}
+
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.two-pane {
+  display: grid;
+  grid-template-columns: minmax(320px, 360px) 1fr;
+  gap: 1.5rem;
+}
+
+.card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(15, 15, 15, 0.1), 0 12px 32px rgba(35, 47, 89, 0.08);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  color: #1e1f23;
+}
+
+.subtitle {
+  color: #5c5f6f;
+  margin: 0.5rem 0 1.25rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: #2a2c38;
+}
+
+.field input {
+  border: 1px solid #d6dae6;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+button {
+  border: none;
+  border-radius: 999px;
+  padding: 0.65rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+  box-shadow: none;
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+button.primary {
+  background: #0057ff;
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(0, 87, 255, 0.25);
+}
+
+button.ghost {
+  background: transparent;
+  color: #1e1f23;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.error {
+  color: #ce2b2b;
+  margin-top: 0.75rem;
+  font-weight: 600;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.pane--right {
+  min-height: 75vh;
+}
+
+.card-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.language-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.language-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.language-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #e3e7f4;
+  border-radius: 0.85rem;
+  padding: 0.9rem 1rem;
+  background: #f9faff;
+  color: #2a2c38;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border 0.15s ease, transform 0.15s ease;
+}
+
+.language-card:hover {
+  border-color: #b7c4ff;
+  transform: translateX(2px);
+}
+
+.language-card--active {
+  border-color: #5a6bff;
+  background: #eef1ff;
+  box-shadow: inset 0 0 0 1px rgba(90, 107, 255, 0.25);
+}
+
+.language-name {
+  margin: 0;
+}
+
+.language-status {
+  margin: 0;
+  color: #6a6f86;
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.language-chevron {
+  font-size: 1.4rem;
+  color: #a0a5c1;
+}
+
+.language-detail header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: #8b8fa6;
+  margin: 0 0 0.15rem;
+}
+
+.primary--large {
+  padding: 0.85rem 1.75rem;
+}
+
+.detail-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.waveform-card {
+  border: 1px solid #eceff7;
+  border-radius: 1rem;
+  padding: 1rem;
+  background: #f7f9ff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.waveform {
+  display: flex;
+  align-items: flex-end;
+  height: 120px;
+  gap: 3px;
+}
+
+.waveform span {
+  flex: 1;
+  height: 20%;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #9cadff 0%, #7284ff 100%);
+  opacity: 0.5;
+}
+
+.waveform.active span {
+  opacity: 1;
+}
+
+.hint {
+  margin: 0;
+  color: #6a6f86;
+  font-size: 0.85rem;
+}
+
+.transcript-panel {
+  border: 1px solid #eceff7;
+  border-radius: 1rem;
+  background: #fdfdff;
+  display: flex;
+  flex-direction: column;
+  min-height: 230px;
+}
+
+.transcript-panel header {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #eceff7;
+}
+
+.transcript-scroll {
+  padding: 0.85rem 1rem;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  scroll-behavior: smooth;
+}
+
+.transcript-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.transcript-scroll::-webkit-scrollbar-thumb {
+  background: rgba(90, 107, 255, 0.4);
+  border-radius: 999px;
+}
+
+.transcript-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.transcript-utterance {
+  border: 1px solid rgba(90, 107, 255, 0.08);
+  border-radius: 0.9rem;
+  padding: 0.85rem;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.05);
+  transition: background 0.2s ease, border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.transcript-utterance--active {
+  background: #eef1ff;
+  border-color: rgba(90, 107, 255, 0.6);
+  box-shadow: 0 6px 24px rgba(90, 107, 255, 0.2);
+}
+
+.utterance-text {
+  margin-top: 0.45rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.transcript-word {
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.5rem;
+  background: #f5f6fb;
+  color: #1f2233;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.transcript-word--active {
+  background: #0057ff;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(0, 87, 255, 0.25);
+}
+
+.timestamp {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6d7085;
+  margin-right: 0.5rem;
+}
+
+.placeholder {
+  color: #999db8;
+  font-style: italic;
+}
+
+.primary--active {
+  background: #233bff;
+  box-shadow: 0 8px 24px rgba(35, 59, 255, 0.35);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+@media (max-width: 960px) {
+  .two-pane {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-body {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+}

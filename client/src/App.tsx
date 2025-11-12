@@ -176,7 +176,10 @@ const LanguageDetail = ({ language, track, transcripts }: LanguageDetailProps) =
 
     if (audioContextRef.current) {
       try {
-        await audioContextRef.current.close();
+        // Only close if the context is not already closed
+        if (audioContextRef.current.state !== "closed") {
+          await audioContextRef.current.close();
+        }
       } catch (error) {
         console.warn("Failed to close audio context", error);
       }
@@ -256,7 +259,8 @@ const LanguageDetail = ({ language, track, transcripts }: LanguageDetailProps) =
     }
 
     try {
-      if (audioContextRef.current?.state === "suspended") {
+      // Only resume if the context exists and is suspended (not closed)
+      if (audioContextRef.current && audioContextRef.current.state === "suspended") {
         await audioContextRef.current.resume();
       }
 
@@ -272,6 +276,7 @@ const LanguageDetail = ({ language, track, transcripts }: LanguageDetailProps) =
       }
     } catch (error) {
       console.error(`Unable to toggle audio for ${language}`, error);
+      setIsPlaying(false);
     }
   };
 

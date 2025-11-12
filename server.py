@@ -32,8 +32,8 @@ daily_helpers = {}
 load_dotenv(override=True)
 
 
-def cleanup():
-    # Clean up function, just to be extra safe
+def cleanup() -> None:
+    """Clean up all bot subprocesses on shutdown."""
     for entry in bot_procs.values():
         proc = entry[0]
         proc.terminate()
@@ -75,7 +75,7 @@ async def start_agent(request: Request):
     if not room.url:
         raise HTTPException(
             status_code=500,
-            detail="Missing 'room' property in request data. Cannot start agent without a target room!",
+            detail="Missing 'room' property in request data. Cannot start agent without a target room.",
         )
 
     # Check if there is already an existing process running in this room
@@ -83,7 +83,10 @@ async def start_agent(request: Request):
         1 for proc in bot_procs.values() if proc[1] == room.url and proc[0].poll() is None
     )
     if num_bots_in_room >= MAX_BOTS_PER_ROOM:
-        raise HTTPException(status_code=500, detail=f"Max bot limited reach for room: {room.url}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Maximum bot limit reached for room: {room.url}. Only {MAX_BOTS_PER_ROOM} bot(s) allowed per room.",
+        )
 
     # Get the token for the room
     token = await daily_helpers["rest"].get_token(
@@ -100,8 +103,7 @@ async def start_agent(request: Request):
     # Note: this is mostly for demonstration purposes (refer to 'deployment' in README)
     try:
         proc = subprocess.Popen(
-            [f"python3 -m bot -u {room.url} -t {token}"],
-            shell=True,
+            ["python3", "-m", "bot", "-u", room.url, "-t", token],
             bufsize=1,
             cwd=os.path.dirname(os.path.abspath(__file__)),
         )
@@ -113,13 +115,12 @@ async def start_agent(request: Request):
 
 
 @app.get("/status/{pid}")
-def get_status(pid: int):
-    # Look up the subprocess
+def get_status(pid: int) -> JSONResponse:
+    """Get the status of a bot process by PID."""
     proc = bot_procs.get(pid)
 
-    # If the subprocess doesn't exist, return an error
     if not proc:
-        raise HTTPException(status_code=404, detail=f"Bot with process id: {pid} not found")
+        raise HTTPException(status_code=404, detail=f"Bot with process ID {pid} not found")
 
     # Check the status of the subprocess
     if proc[0].poll() is None:

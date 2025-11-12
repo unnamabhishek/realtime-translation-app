@@ -5,7 +5,6 @@
 #
 
 import asyncio
-import copy
 import json
 import os
 import sys
@@ -86,11 +85,11 @@ TRANSLATION_TARGETS = [
 class TranslationTranscriptEmitter(FrameProcessor):
     """Injects translation text into transport messages for downstream clients."""
 
-    def __init__(self, *, language: str):
+    def __init__(self, *, language: str) -> None:
         super().__init__(name=f"{language}-transcript-emitter")
         self._language = language
 
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
 
         if direction is FrameDirection.DOWNSTREAM and isinstance(frame, LLMTextFrame):
@@ -119,12 +118,12 @@ class TranscriptChunk:
 class TranscriptionChunkBuffer(FrameProcessor):
     """Captures STT output in chronological order and tags frames with chunk metadata."""
 
-    def __init__(self, history_size: int = 200):
+    def __init__(self, history_size: int = 200) -> None:
         super().__init__(name="transcription-chunk-buffer")
         self._history: Deque[TranscriptChunk] = deque(maxlen=history_size)
         self._counter = 0
 
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
 
         if direction is FrameDirection.DOWNSTREAM and isinstance(frame, LLMTextFrame):
@@ -142,14 +141,14 @@ class TranscriptionChunkBuffer(FrameProcessor):
 class SequentialTranslationQueue(FrameProcessor):
     """Guarantees translations feed the TTS stage one chunk at a time."""
 
-    def __init__(self, *, language: str):
+    def __init__(self, *, language: str) -> None:
         super().__init__(name=f"{language}-translation-queue")
         self._language = language
         self._queue: asyncio.Queue[Tuple[LLMTextFrame, FrameDirection]] = asyncio.Queue()
         self._drain_task: Optional[asyncio.Task] = None
         self._drain_lock = asyncio.Lock()
 
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
 
         if direction is FrameDirection.DOWNSTREAM and isinstance(frame, LLMTextFrame):
@@ -158,12 +157,12 @@ class SequentialTranslationQueue(FrameProcessor):
         else:
             await self.push_frame(frame, direction)
 
-    async def _ensure_drain(self):
+    async def _ensure_drain(self) -> None:
         if self._drain_task and not self._drain_task.done():
             return
         self._drain_task = asyncio.create_task(self._drain_queue())
 
-    async def _drain_queue(self):
+    async def _drain_queue(self) -> None:
         async with self._drain_lock:
             while not self._queue.empty():
                 frame, direction = await self._queue.get()
@@ -194,10 +193,10 @@ class SequentialTranslationQueue(FrameProcessor):
 class TranscriptionStreamAdapter(FrameProcessor):
     """Logs interim STT results and emits final transcripts."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(name="transcription-stream-adapter")
 
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
 
         if isinstance(frame, InterimTranscriptionFrame):
@@ -223,13 +222,13 @@ class TranscriptionStreamAdapter(FrameProcessor):
 class DirectTranslationProcessor(FrameProcessor):
     """Calls OpenAI per chunk to produce the translated text."""
 
-    def __init__(self, *, llm: OpenAILLMService, system_prompt: str, target_language: str):
+    def __init__(self, *, llm: OpenAILLMService, system_prompt: str, target_language: str) -> None:
         super().__init__(name=f"{target_language}-translation-processor")
         self._llm = llm
         self._system_prompt = system_prompt
         self._target_language = target_language
 
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
 
         if not isinstance(frame, TranscriptionFrame):
@@ -252,7 +251,7 @@ class DirectTranslationProcessor(FrameProcessor):
         translation = await self._llm.run_inference(context)
         translation = (translation or "").strip()
         if not translation:
-            logger.warning("No translation received for chunk %s; falling back to source text.", chunk_id)
+            logger.warning(f"No translation received for chunk {chunk_id}; falling back to source text.")
             translation = text
 
         logger.info("[translation-output] language={} chunk={} text={}", self._target_language, chunk_id, translation)
@@ -265,11 +264,11 @@ class DirectTranslationProcessor(FrameProcessor):
 class TTSAudioLogger(FrameProcessor):
     """Logs every audio buffer generated by the TTS engine for traceability."""
 
-    def __init__(self, *, language: str):
+    def __init__(self, *, language: str) -> None:
         super().__init__(name=f"{language}-tts-logger")
         self._language = language
 
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
 
         if direction is FrameDirection.DOWNSTREAM and isinstance(frame, TTSAudioRawFrame):
@@ -349,7 +348,7 @@ def _create_cartesia_tts(
     )
 
 
-def _resolve_voice_id(target: dict, provider: str) -> str:
+def _resolve_voice_id(target: dict[str, str], provider: str) -> str:
     if provider == "cartesia":
         env_name = target.get("cartesia_voice_env")
         voice = (os.getenv(env_name) if env_name else None) or os.getenv("CARTESIA_DEFAULT_VOICE") or target.get("cartesia_default_voice")
@@ -374,94 +373,215 @@ def _create_tts_service(
     return _create_azure_tts(voice=voice_id, language=language, destination=destination)
 
 
-async def main():
-    async with aiohttp.ClientSession() as session:
-        (room_url, token) = await configure(session)
+def _validate_environment() -> None:
+    """Validate required environment variables at startup."""
+    missing_vars = []
+    
+    # Check LLM credentials
+    if not (os.getenv("LITELLM_API_KEY") or os.getenv("OPENAI_API_KEY")):
+        missing_vars.append("LITELLM_API_KEY or OPENAI_API_KEY")
+    
+    # Check STT credentials
+    if not os.getenv("DEEPGRAM_API_KEY"):
+        missing_vars.append("DEEPGRAM_API_KEY")
+    
+    # Check TTS provider and credentials
+    tts_provider = os.getenv("TTS_PROVIDER", "azure").strip().lower()
+    if tts_provider == "azure":
+        if not os.getenv("AZURE_SPEECH_KEY"):
+            missing_vars.append("AZURE_SPEECH_KEY")
+        if not os.getenv("AZURE_SPEECH_REGION"):
+            missing_vars.append("AZURE_SPEECH_REGION")
+    elif tts_provider == "cartesia":
+        if not os.getenv("CARTESIA_API_KEY"):
+            missing_vars.append("CARTESIA_API_KEY")
+    else:
+        raise RuntimeError(
+            f"Unsupported TTS_PROVIDER '{tts_provider}'. Expected 'azure' or 'cartesia'."
+        )
+    
+    # Check Daily credentials (needed for configure)
+    if not (os.getenv("DAILY_SAMPLE_ROOM_URL") or os.getenv("DAILY_API_KEY")):
+        # This is checked in configure(), but we validate here for early failure
+        pass
+    
+    if missing_vars:
+        raise RuntimeError(
+            f"Missing required environment variables: {', '.join(missing_vars)}. "
+            "Please set these variables before starting the bot."
+        )
 
-        target = TRANSLATION_TARGETS[0]
-        audio_destinations = [target["name"]]
-        audio_out_mixer = {
-            target["name"]: SoundfileMixer(
-                sound_files={"office": BACKGROUND_SOUND_FILE}, default_sound="office"
+
+def _validate_configuration() -> None:
+    """Validate configuration data structures."""
+    if not TRANSLATION_TARGETS:
+        raise RuntimeError("TRANSLATION_TARGETS list is empty. At least one target language must be configured.")
+    
+    target = TRANSLATION_TARGETS[0]
+    required_keys = ["name", "prompt", "language"]
+    missing_keys = [key for key in required_keys if key not in target]
+    if missing_keys:
+        raise RuntimeError(
+            f"TRANSLATION_TARGETS[0] is missing required keys: {', '.join(missing_keys)}"
+        )
+
+
+def _validate_files() -> None:
+    """Validate required files exist."""
+    background_file = Path(BACKGROUND_SOUND_FILE)
+    if not background_file.exists():
+        logger.warning(
+            f"Background sound file '{BACKGROUND_SOUND_FILE}' not found. "
+            "The bot will continue but background audio may not work."
+        )
+
+
+async def main() -> None:
+    """Main entry point for the translation bot."""
+    try:
+        # Validate environment and configuration before starting
+        logger.info("Validating environment variables and configuration...")
+        _validate_environment()
+        _validate_configuration()
+        _validate_files()
+        logger.info("Validation complete. Starting bot initialization...")
+        
+        async with aiohttp.ClientSession() as session:
+            try:
+                (room_url, token) = await configure(session)
+                if not room_url or not token:
+                    raise RuntimeError("Failed to obtain room URL or token from configure()")
+                logger.info(f"Configured Daily room: {room_url}")
+            except Exception as e:
+                logger.error(f"Failed to configure Daily room: {e}")
+                raise RuntimeError(f"Daily room configuration failed: {e}") from e
+
+            target = TRANSLATION_TARGETS[0]
+            audio_destinations = [target["name"]]
+            
+            # Validate background sound file exists before using it
+            background_file = Path(BACKGROUND_SOUND_FILE)
+            audio_out_mixer = {}
+            if background_file.exists():
+                audio_out_mixer[target["name"]] = SoundfileMixer(
+                    sound_files={"office": BACKGROUND_SOUND_FILE}, default_sound="office"
+                )
+            else:
+                logger.warning(
+                    f"Background sound file '{BACKGROUND_SOUND_FILE}' not found. "
+                    "Continuing without background audio mixer."
+                )
+
+            try:
+                transport = DailyTransport(
+                    room_url,
+                    token,
+                    "Multi translation bot",
+                    DailyParams(
+                        audio_in_enabled=True,
+                        audio_out_enabled=True,
+                        audio_out_mixer=audio_out_mixer if audio_out_mixer else None,
+                        audio_out_destinations=audio_destinations,
+                        video_in_enabled=False,
+                        video_out_enabled=False,
+                        camera_out_enabled=False,
+                        microphone_out_enabled=False,  # Disable since we just use custom tracks
+                        vad_analyzer=SileroVADAnalyzer(),
+                    ),
+                )
+                logger.info("DailyTransport initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize DailyTransport: {e}")
+                raise RuntimeError(f"DailyTransport initialization failed: {e}") from e
+
+            try:
+                deepgram_key = os.getenv("DEEPGRAM_API_KEY")
+                if not deepgram_key:
+                    raise RuntimeError("DEEPGRAM_API_KEY is not set")
+                stt = DeepgramSTTService(
+                    api_key=deepgram_key,
+                    live_options=LiveOptions(interim_results=True, vad_events=False),
+                )
+                logger.info("DeepgramSTTService initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize DeepgramSTTService: {e}")
+                raise RuntimeError(f"STT service initialization failed: {e}") from e
+
+            transcription_adapter = TranscriptionStreamAdapter()
+            tts_provider = os.getenv("TTS_PROVIDER", "azure").strip().lower()
+            if tts_provider not in ("azure", "cartesia"):
+                raise RuntimeError(
+                    f"Unsupported TTS_PROVIDER '{tts_provider}'. Expected 'azure' or 'cartesia'."
+                )
+
+            chunk_buffer = TranscriptionChunkBuffer()
+            
+            try:
+                llm_service = _create_llm_service()
+                logger.info("LLM service initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize LLM service: {e}")
+                raise RuntimeError(f"LLM service initialization failed: {e}") from e
+
+            translator = DirectTranslationProcessor(
+                llm=llm_service,
+                system_prompt=target["prompt"],
+                target_language=target["name"],
             )
-        }
+            
+            try:
+                voice_id = _resolve_voice_id(target, tts_provider)
+                tts_service = _create_tts_service(
+                    provider=tts_provider,
+                    voice_id=voice_id,
+                    language=target["language"],
+                    destination=target["name"],
+                )
+                logger.info(f"TTS service ({tts_provider}) initialized successfully with voice: {voice_id}")
+            except Exception as e:
+                logger.error(f"Failed to initialize TTS service: {e}")
+                raise RuntimeError(f"TTS service initialization failed: {e}") from e
 
-        transport = DailyTransport(
-            room_url,
-            token,
-            "Multi translation bot",
-            DailyParams(
-                audio_in_enabled=True,
-                audio_out_enabled=True,
-                audio_out_mixer=audio_out_mixer,
-                audio_out_destinations=audio_destinations,
-                video_in_enabled=False,
-                video_out_enabled=False,
-                camera_out_enabled=False,
-                microphone_out_enabled=False,  # Disable since we just use custom tracks
-                vad_analyzer=SileroVADAnalyzer(),
-            ),
-        )
-
-        stt = DeepgramSTTService(
-            api_key=os.getenv("DEEPGRAM_API_KEY"),
-            live_options=LiveOptions(interim_results=True, vad_events=False),
-        )
-        transcription_adapter = TranscriptionStreamAdapter()
-        tts_provider = os.getenv("TTS_PROVIDER", "azure").strip().lower()
-        if tts_provider not in ("azure", "cartesia"):
-            raise RuntimeError(
-                f"Unsupported TTS_PROVIDER '{tts_provider}'. Expected 'azure' or 'cartesia'."
-            )
-
-        chunk_buffer = TranscriptionChunkBuffer()
-        target = TRANSLATION_TARGETS[0]
-        llm_service = _create_llm_service()
-        translator = DirectTranslationProcessor(
-            llm=llm_service,
-            system_prompt=target["prompt"],
-            target_language=target["name"],
-        )
-        voice_id = _resolve_voice_id(target, tts_provider)
-        tts_service = _create_tts_service(
-            provider=tts_provider,
-            voice_id=voice_id,
-            language=target["language"],
-            destination=target["name"],
-        )
-
-        translation_branch = [
-            translator,
-            TranslationTranscriptEmitter(language=target["name"]),
-            SequentialTranslationQueue(language=target["name"]),
-            tts_service,
-            TTSAudioLogger(language=target["name"]),
-        ]
-
-        pipeline = Pipeline(
-            [
-                transport.input(),  # Transport user input
-                stt,
-                transcription_adapter,
-                chunk_buffer,
-                ParallelPipeline(translation_branch),
-                transport.output(),  # Transport bot output
+            translation_branch = [
+                translator,
+                TranslationTranscriptEmitter(language=target["name"]),
+                SequentialTranslationQueue(language=target["name"]),
+                tts_service,
+                TTSAudioLogger(language=target["name"]),
             ]
-        )
 
-        task = PipelineTask(
-            pipeline,
-            params=PipelineParams(
-                audio_in_sample_rate=16000,
-                audio_out_sample_rate=16000,
-                enable_metrics=True,
-                enable_usage_metrics=True,
-            ),
-            observers=[TranscriptionLogObserver()],
-        )
+            pipeline = Pipeline(
+                [
+                    transport.input(),  # Transport user input
+                    stt,
+                    transcription_adapter,
+                    chunk_buffer,
+                    ParallelPipeline(translation_branch),
+                    transport.output(),  # Transport bot output
+                ]
+            )
 
-        runner = PipelineRunner()
-        await runner.run(task)
+            task = PipelineTask(
+                pipeline,
+                params=PipelineParams(
+                    audio_in_sample_rate=16000,
+                    audio_out_sample_rate=16000,
+                    enable_metrics=True,
+                    enable_usage_metrics=True,
+                ),
+                observers=[TranscriptionLogObserver()],
+            )
+
+            logger.info("Starting pipeline runner...")
+            runner = PipelineRunner()
+            await runner.run(task)
+            
+    except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt. Shutting down gracefully...")
+        raise
+    except Exception as e:
+        logger.exception(f"Fatal error in main(): {e}")
+        raise
 
 
 if __name__ == "__main__":

@@ -201,10 +201,11 @@ button.ghost {
 }
 
 .detail-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
   margin-top: 1.25rem;
+  flex: 1;
 }
 
 .waveform-card {
@@ -249,6 +250,8 @@ button.ghost {
   display: flex;
   flex-direction: column;
   min-height: 230px;
+  height: clamp(280px, 45vh, 420px);
+  overflow: hidden;
 }
 
 .transcript-panel header {
@@ -346,10 +349,6 @@ button.ghost {
 
 @media (max-width: 960px) {
   .two-pane {
-    grid-template-columns: 1fr;
-  }
-
-  .detail-body {
     grid-template-columns: 1fr;
   }
 

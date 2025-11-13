@@ -12,11 +12,7 @@ type TrackInfo = {
   participantId: string;
 };
 
-const LANGUAGE_OPTIONS = [
-  { id: "hindi", label: "Hindi" },
-  { id: "telugu", label: "Telugu" },
-  { id: "marathi", label: "Marathi" }
-];
+const LANGUAGE_OPTIONS = [{ id: "hindi", label: "Hindi" }];
 
 const labelize = (languageId: string) =>
   LANGUAGE_OPTIONS.find((option) => option.id === languageId)?.label ??
@@ -123,6 +119,7 @@ const LanguageDetail = ({ language, track, transcripts }: LanguageDetailProps) =
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
 
   const { utterances, wordToUtterance } = useMemo(() => buildUtterances(transcripts), [transcripts]);
+  const orderedUtterances = useMemo(() => [...utterances].reverse(), [utterances]);
   const hasTrack = Boolean(track);
 
   useEffect(() => {
@@ -153,7 +150,7 @@ const LanguageDetail = ({ language, track, transcripts }: LanguageDetailProps) =
     }
     const node = transcriptScrollRef.current;
     if (node) {
-      node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+      node.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [hasTrack, utterances.length]);
 
@@ -328,7 +325,7 @@ const LanguageDetail = ({ language, track, transcripts }: LanguageDetailProps) =
             ) : !utterances.length ? (
               <p className="placeholder">Audio ready. Waiting for spoken text…</p>
             ) : (
-              utterances.map((utterance) => (
+              orderedUtterances.map((utterance) => (
                 <article
                   key={utterance.id}
                   className={`transcript-utterance ${

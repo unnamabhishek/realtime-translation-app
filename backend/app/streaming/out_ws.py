@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, List
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -6,13 +7,15 @@ from app.config import SAMPLE_RATE
 
 router = APIRouter()
 SUBS: Dict[str, Dict[str, List[WebSocket]]] = {}
-
+logger = logging.getLogger("out_ws")
+logger.setLevel(logging.INFO)
 
 @router.websocket("/out/{session_id}/{target}")
 async def out(ws: WebSocket, session_id: str, target: str):
     await ws.accept()
     await ws.send_text(f'{{"session_id":"{session_id}","target":"{target}","sample_rate":{SAMPLE_RATE}}}')
     SUBS.setdefault(session_id, {}).setdefault(target, []).append(ws)
+    logger.info("ws connected session=%s target=%s total=%s", session_id, target, len(SUBS[session_id][target]))
     try:
         while True:
             await ws.receive_text()
@@ -26,3 +29,4 @@ async def out(ws: WebSocket, session_id: str, target: str):
                 sessions.pop(target)
         if not sessions:
             SUBS.pop(session_id, None)
+        logger.info("ws disconnected session=%s target=%s remaining=%s", session_id, target, len(SUBS.get(session_id, {}).get(target, [])))

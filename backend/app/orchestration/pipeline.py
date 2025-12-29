@@ -50,8 +50,8 @@ _tts_queues: Dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
 _tts_tasks: Dict[str, asyncio.Task] = {}
 _tts_last_duration: Dict[str, float] = defaultdict(float)
 TTS_LEAD_TIME_SECONDS = 1.5  # max lead time before previous ends
-MAX_SEGMENT_CHARS = 400
-MAX_SEGMENT_HARD_CHARS = 600
+MAX_SEGMENT_CHARS = 40
+MAX_SEGMENT_HARD_CHARS = 60
 
 async def handle_session(ws: WebSocket, meta_json: str) -> None:
     meta = json.loads(meta_json)

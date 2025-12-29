@@ -6,7 +6,6 @@ from app.orchestration.pipeline import handle_session
 
 router = APIRouter()
 
-
 @router.websocket("/ingest")
 async def ingest(ws: WebSocket):
     await ws.accept()

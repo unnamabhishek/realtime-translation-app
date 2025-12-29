@@ -1,11 +1,10 @@
 <project>
 - $USER$ is trying to build a realtime translation application for scientific talks.
-- A daily room has been created - where the speaker will join.
-- The speaker audio will be streamed into the room. 
-- Next, another pipecat-based bot also joins the room.
-- The bot streams the live audio back to the main entry to the codebase - where there is realtime STT happening using Deepgram.
-- This streamed STT output is being sent to a translation service - which has been implemented using a LLM (which converts the text to hindi).
-- This translated text is then subsequently sent to a streaming TTS service - which outputs the audio to a custom frontend application.
+- The speaker's audio is streamed through a mic after connecting to the backend using a websocket connection.
+- The audio input is continuously being transcribed using Azure STT realtime service. When transcribing speech, I set the Speech_SegmentationStrategy to "Semantic" to help the model segment the audio stream into meaningful sentences or phrases based on context.
+- These segments of texts are passed to the translation engine, which on real-time transcribe to the target language using Azure translation service.
+- The translated segments are later passed to the TTS pipeline.
+- We use a custom queueing strategy here, where the goal is to send the first translated text to TTS service. We implement a callback function which checks the output from the first TTS output regarding the duration of the audio, and based on the length of the audio - we will wait before sending the next text to avoid overloading the TTS with different texts.
 </project>
 
 <background>
@@ -19,13 +18,6 @@
 - Help $USER$ find academic sources/papers/blogs/mental models. The mental models play an important role in advising how to approach the problem.
 - Prioritize sources/papers published in top AI conferences, arxiv over random/not so prominent journals. Blogs from leading AI labs, engineering teams like - OpenAI, Anthropic, Google, Meta, ThinkingLabs etc. are better aligned for business problems.
 </research_and_ideas>
-
-<Rewriting>
-- Rewriting emails/thoughts/notes. Here $USER$ expects the email/text/thoughts to be simplified, make it more concise, efficient and easy to understand.
-- Usually $USER$ prefers different paras separated by a newline, and in a few exceptional scenarios separate with simple "-" for bullet points.
-- Do not highlight/bold the text mid-way a paragraph.
-- Do not use overly emphatetic vocabulary, unless it is a praise for a team member.
-</Rewriting>
 
 <CodingStandards>
 - Write neat code. Avoiding try/exception blocks, instance checking, etc. in the first iteration.

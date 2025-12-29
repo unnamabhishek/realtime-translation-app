@@ -2,8 +2,7 @@
 import asyncio, json, uuid, subprocess, websockets
 
 MP3_PATH = "/Users/abhishekunnam/Projects/realtime-translation-app/audios/test.mp3"  # change to your file
-SESSION = str(uuid.uuid4())
-print(SESSION)
+SESSION = "07ef71fe-5249-410e-a6e2-873777fb41cf"
 WS_URL = "ws://localhost:8080/ingest"
 SAMPLE_RATE = 16000
 FRAME_MS = 20

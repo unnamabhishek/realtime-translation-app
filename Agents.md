@@ -1,10 +1,15 @@
 <project>
 - $USER$ is trying to build a realtime translation application for scientific talks.
-- The speaker's audio is streamed through a mic after connecting to the backend using a websocket connection.
+- The speaker's audio is streamed through an audio source after connecting to the backend using a websocket connection.
+- In the current codebase, there are 3 different audio sources:
+    - Via system mic
+    - Via audio file
+    - Via external mic (yet to be developed)
 - The audio input is continuously being transcribed using Azure STT realtime service. When transcribing speech, I set the Speech_SegmentationStrategy to "Semantic" to help the model segment the audio stream into meaningful sentences or phrases based on context.
 - These segments of texts are passed to the translation engine, which on real-time transcribe to the target language using Azure translation service.
 - The translated segments are later passed to the TTS pipeline.
 - We use a custom queueing strategy here, where the goal is to send the first translated text to TTS service. We implement a callback function which checks the output from the first TTS output regarding the duration of the audio, and based on the length of the audio - we will wait before sending the next text to avoid overloading the TTS with different texts.
+- Finally all the TTS segments are streamed to external streaming services like Youtube/Twitch via OBS bridge. Every audio is being played on a virtual audio device (BlackHole 2ch).
 </project>
 
 <background>

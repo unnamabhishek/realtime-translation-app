@@ -1,6 +1,6 @@
 import azure.cognitiveservices.speech as speechsdk
 
-def make_speech_recognizer(key: str, region: str, lang: str = "en-IN", phrase_list: list[str] | None = None):
+def make_speech_recognizer(key: str, region: str, lang: str = "en-US", phrase_list: list[str] | None = None):
     speech_config = speechsdk.SpeechConfig(subscription=key, region=region)
     speech_config.set_property(speechsdk.PropertyId.Speech_SegmentationStrategy, "Semantic")
     speech_config.enable_dictation()

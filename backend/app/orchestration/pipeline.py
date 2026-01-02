@@ -18,7 +18,7 @@ from app.config import (
     BYTES_PER_SAMPLE,
     DEFAULT_SOURCE_LANG,
     SAMPLE_RATE,
-    TARGET_LANGS,
+    TARGET_LANG,
     VOICE_MAP,
 )
 from app.nlp.segmenter import should_cut_segment
@@ -36,9 +36,13 @@ if not logger.handlers:
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
 
+def _ensure_session_logger(session_id: str) -> None:
     log_dir = Path(__file__).resolve().parents[3] / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / f"pipeline-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.log"
+    log_file = log_dir / f"pipeline-{session_id}.log"
+    if any(isinstance(handler, logging.FileHandler) and Path(handler.baseFilename) == log_file for handler in logger.handlers):
+        return
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
@@ -56,9 +60,10 @@ MAX_SEGMENT_HARD_CHARS = 60
 async def handle_session(ws: WebSocket, meta_json: str) -> None:
     meta = json.loads(meta_json)
     session_id = meta.get("session_id") or str(uuid.uuid4())
+    _ensure_session_logger(session_id)
     source_lang = meta.get("lang_src", DEFAULT_SOURCE_LANG)
-    targets = meta.get("targets", TARGET_LANGS)
-    logger.info("session start id=%s src=%s targets=%s", session_id, source_lang, targets)
+    target = meta.get("target") or (meta.get("targets", [])[:1] or [TARGET_LANG])[0]
+    logger.info("session start id=%s src=%s target=%s", session_id, source_lang, target)
     recognizer, audio_stream = make_speech_recognizer(AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, source_lang, load_glossary_terms())
     buffer_text = ""
     silence_ms = 0
@@ -99,21 +104,20 @@ async def handle_session(ws: WebSocket, meta_json: str) -> None:
 
         if buffer_text and (should_cut or over_soft_limit or over_hard_limit):
             chunk_id = f"{session_id}-{int(time.time()*1000)}"
-            await process_segment(session_id, chunk_id, buffer_text, targets)
+            await process_segment(session_id, chunk_id, buffer_text, target)
             buffer_text = ""
             silence_ms = 0
 
     recognizer.stop_continuous_recognition()
 
 
-async def process_segment(session_id: str, chunk_id: str, text: str, targets: list[str]) -> None:
+async def process_segment(session_id: str, chunk_id: str, text: str, target: str) -> None:
     terms = load_glossary_terms()
     logger.info("segment start session=%s chunk=%s text=%s", session_id, chunk_id, text)
-    for target in targets:
-        translated_list = translate_texts([text], target, AZURE_TRANSLATOR_KEY, AZURE_TRANSLATOR_ENDPOINT, AZURE_TRANSLATOR_REGION, terms)
-        translated = translated_list[0] if translated_list else ""
-        logger.info("translation session=%s chunk=%s target=%s text=%s", session_id, chunk_id, target, translated)
-        await _enqueue_tts(session_id, chunk_id, translated, target)
+    translated_list = translate_texts([text], target, AZURE_TRANSLATOR_KEY, AZURE_TRANSLATOR_ENDPOINT, AZURE_TRANSLATOR_REGION, terms)
+    translated = translated_list[0] if translated_list else ""
+    logger.info("translation session=%s chunk=%s target=%s text=%s", session_id, chunk_id, target, translated)
+    await _enqueue_tts(session_id, chunk_id, translated, target)
     logger.info("segment done session=%s chunk=%s", session_id, chunk_id)
 
 

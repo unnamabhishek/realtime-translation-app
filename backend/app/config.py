@@ -17,3 +17,9 @@ WS_INGEST_PATH = os.getenv("WS_INGEST_PATH", "/ingest")
 WS_OUT_PATH = os.getenv("WS_OUT_PATH", "/out")
 SAMPLE_RATE = int(os.getenv("SAMPLE_RATE", "16000"))
 BYTES_PER_SAMPLE = 2
+LOCAL_TTS_PLAYBACK = os.getenv("LOCAL_TTS_PLAYBACK", "0") == "1"
+TTS_OUTPUT_DEVICE = os.getenv("TTS_OUTPUT_DEVICE", "")
+TTS_OUTPUT_CHANNELS = int(os.getenv("TTS_OUTPUT_CHANNELS", "2"))
+TTS_OUTPUT_SAMPLE_RATE = int(os.getenv("TTS_OUTPUT_SAMPLE_RATE", str(SAMPLE_RATE)))
+SEND_WS_AUDIO = os.getenv("SEND_WS_AUDIO", "1") == "1"
+TTS_RATE = os.getenv("TTS_RATE", "medium")

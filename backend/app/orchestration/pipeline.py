@@ -1,8 +1,10 @@
 import asyncio
+import io
 import json
 import logging
 import time
 import uuid
+import wave
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -17,15 +19,23 @@ from app.config import (
     AZURE_TRANSLATOR_REGION,
     BYTES_PER_SAMPLE,
     DEFAULT_SOURCE_LANG,
+    LOCAL_TTS_PLAYBACK,
     SAMPLE_RATE,
+    SEND_WS_AUDIO,
     TARGET_LANG,
+    TTS_OUTPUT_CHANNELS,
+    TTS_OUTPUT_DEVICE,
+    TTS_OUTPUT_SAMPLE_RATE,
+    TTS_RATE,
     VOICE_MAP,
 )
 from app.nlp.segmenter import should_cut_segment
 from app.nlp.translator import translate_texts
 from app.streaming.out_ws import SUBS
 from app.stt.azure_stt import make_speech_recognizer
-from app.tts.azure_tts import synth_wav
+import numpy as np
+import sounddevice as sd
+from app.tts.azure_tts import stream_pcm
 
 logger = logging.getLogger("pipeline")
 logger.setLevel(logging.INFO)
@@ -54,8 +64,11 @@ _tts_queues: Dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
 _tts_tasks: Dict[str, asyncio.Task] = {}
 _tts_last_duration: Dict[str, float] = defaultdict(float)
 TTS_LEAD_TIME_SECONDS = 1.5  # max lead time before previous ends
-MAX_SEGMENT_CHARS = 40
-MAX_SEGMENT_HARD_CHARS = 60
+MAX_SEGMENT_CHARS = 20
+MAX_SEGMENT_HARD_CHARS = 40
+_local_stream = None
+_local_stream_rate = None
+_local_stream_channels = None
 
 async def handle_session(ws: WebSocket, meta_json: str) -> None:
     meta = json.loads(meta_json)
@@ -67,7 +80,8 @@ async def handle_session(ws: WebSocket, meta_json: str) -> None:
     recognizer, audio_stream = make_speech_recognizer(AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, source_lang, load_glossary_terms())
     buffer_text = ""
     silence_ms = 0
-    last_audio_ts = time.perf_counter()
+    last_loop_ts = time.perf_counter()
+    last_recognized_ts = None
     result_queue: asyncio.Queue[str] = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
@@ -80,25 +94,31 @@ async def handle_session(ws: WebSocket, meta_json: str) -> None:
     recognizer.start_continuous_recognition()
 
     while True:
-        message = await ws.receive()
-        if "bytes" in message:
+        try:
+            message = await asyncio.wait_for(ws.receive(), timeout=0.2)
+        except asyncio.TimeoutError:
+            message = None
+        if message and "bytes" in message:
             payload = message["bytes"]
             audio_stream.write(payload)
             frame_ms = int(len(payload) / (BYTES_PER_SAMPLE * SAMPLE_RATE) * 1000)
             silence_ms = max(0, silence_ms - frame_ms)
-            last_audio_ts = time.perf_counter()
-        elif "text" in message and message["text"] == "EOF":
+        elif message and "text" in message and message["text"] == "EOF":
             break
 
         while not result_queue.empty():
             text = await result_queue.get()
             buffer_text = f"{buffer_text} {text}".strip() if buffer_text else text
             logger.info("stt recognized session=%s text=%s", session_id, text)
+            last_recognized_ts = time.perf_counter()
 
-        elapsed_ms = int((time.perf_counter() - last_audio_ts) * 1000)
+        now = time.perf_counter()
+        elapsed_ms = int((now - last_loop_ts) * 1000)
+        last_loop_ts = now
         silence_ms = min(2000, silence_ms + elapsed_ms)
 
-        should_cut = should_cut_segment(buffer_text, silence_ms)
+        idle_ms = int((time.perf_counter() - last_recognized_ts) * 1000) if last_recognized_ts else 0
+        should_cut = should_cut_segment(buffer_text, silence_ms) or (buffer_text and idle_ms >= 2000)
         over_soft_limit = len(buffer_text) >= MAX_SEGMENT_CHARS and buffer_text.strip().endswith((".", "?", "!", "।", "॥", "…"))
         over_hard_limit = len(buffer_text) >= MAX_SEGMENT_HARD_CHARS
 
@@ -129,6 +149,7 @@ async def _enqueue_tts(session_id: str, chunk_id: str, translated_text: str, tar
 
 
 async def _tts_worker(target: str) -> None:
+    global _local_stream, _local_stream_rate, _local_stream_channels
     lock = _tts_locks[target]
     queue = _tts_queues[target]
     while True:
@@ -148,23 +169,7 @@ async def _tts_worker(target: str) -> None:
 
             voice = VOICE_MAP.get(target, VOICE_MAP.get("hi-IN", ""))
             logger.info("tts start session=%s chunk=%s target=%s voice=%s", session_id, chunk_id, target, voice)
-            synth_start = time.time()
-            audio_bytes = await asyncio.to_thread(synth_wav, translated, AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, voice)
-            synth_elapsed = time.time() - synth_start
-            duration_sec = len(audio_bytes) / float(SAMPLE_RATE * BYTES_PER_SAMPLE) if audio_bytes else 0.0
             send_ts = time.time()
-            _tts_expected_end[target] = send_ts + duration_sec
-            logger.info(
-                "tts done session=%s chunk=%s target=%s bytes=%s synth_elapsed=%.2fs duration=%.2fs",
-                session_id,
-                chunk_id,
-                target,
-                len(audio_bytes),
-                synth_elapsed,
-                duration_sec,
-            )
-            _tts_last_duration[target] = duration_sec
-
             chunk_meta = json.dumps(
                 {
                     "session_id": session_id,
@@ -172,20 +177,76 @@ async def _tts_worker(target: str) -> None:
                     "target": target,
                     "text": translated,
                     "timestamp": send_ts,
-                    "duration_sec": duration_sec,
+                    "duration_sec": 0.0,
                 }
             )
-            clients = SUBS.get(session_id, {}).get(target, [])
             alive = []
-            for client in clients:
-                try:
-                    await client.send_text(chunk_meta)
-                    await client.send_bytes(audio_bytes)
-                    alive.append(client)
-                except Exception as exc:
-                    logger.warning("drop closed client session=%s target=%s error=%s", session_id, target, exc)
-            SUBS.get(session_id, {}).update({target: alive})
-            if not alive:
+            if SEND_WS_AUDIO:
+                clients = SUBS.get(session_id, {}).get(target, [])
+                for client in clients:
+                    try:
+                        await client.send_text(chunk_meta)
+                        alive.append(client)
+                    except Exception as exc:
+                        logger.warning("drop closed client session=%s target=%s error=%s", session_id, target, exc)
+                SUBS.get(session_id, {}).update({target: alive})
+
+            pcm_chunks = []
+            local_play_start = None
+            async for pcm in stream_pcm(translated, AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, voice, TTS_OUTPUT_SAMPLE_RATE, TTS_RATE):
+                pcm_chunks.append(pcm)
+                if LOCAL_TTS_PLAYBACK:
+                    audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+                    if TTS_OUTPUT_CHANNELS == 2:
+                        audio = np.repeat(audio[:, None], 2, axis=1)
+                    if _local_stream is None or _local_stream_rate != TTS_OUTPUT_SAMPLE_RATE or _local_stream_channels != TTS_OUTPUT_CHANNELS:
+                        if _local_stream is not None:
+                            _local_stream.stop()
+                            _local_stream.close()
+                        _local_stream_rate = TTS_OUTPUT_SAMPLE_RATE
+                        _local_stream_channels = TTS_OUTPUT_CHANNELS
+                        device = TTS_OUTPUT_DEVICE if TTS_OUTPUT_DEVICE else None
+                        _local_stream = sd.OutputStream(device=device, channels=TTS_OUTPUT_CHANNELS, samplerate=TTS_OUTPUT_SAMPLE_RATE, dtype="float32")
+                        _local_stream.start()
+                    if local_play_start is None:
+                        local_play_start = time.time()
+                        logger.info("local playback start session=%s chunk=%s target=%s ts=%.3f", session_id, chunk_id, target, local_play_start)
+                    await asyncio.to_thread(_local_stream.write, audio)
+
+            pcm_bytes = b"".join(pcm_chunks)
+            duration_sec = len(pcm_bytes) / float(TTS_OUTPUT_SAMPLE_RATE * BYTES_PER_SAMPLE) if pcm_bytes else 0.0
+            _tts_expected_end[target] = send_ts + duration_sec
+            _tts_last_duration[target] = duration_sec
+
+            wav_bytes = b""
+            if pcm_bytes:
+                buffer = io.BytesIO()
+                with wave.open(buffer, "wb") as wav:
+                    wav.setnchannels(1)
+                    wav.setsampwidth(BYTES_PER_SAMPLE)
+                    wav.setframerate(TTS_OUTPUT_SAMPLE_RATE)
+                    wav.writeframes(pcm_bytes)
+                wav_bytes = buffer.getvalue()
+
+            logger.info(
+                "tts done session=%s chunk=%s target=%s bytes=%s duration=%.2fs",
+                session_id,
+                chunk_id,
+                target,
+                len(pcm_bytes),
+                duration_sec,
+            )
+            if local_play_start is not None:
+                logger.info("local playback end session=%s chunk=%s target=%s ts=%.3f duration=%.2fs", session_id, chunk_id, target, time.time(), duration_sec)
+
+            if SEND_WS_AUDIO and alive and wav_bytes:
+                for client in alive:
+                    try:
+                        await client.send_bytes(wav_bytes)
+                    except Exception as exc:
+                        logger.warning("drop closed client session=%s target=%s error=%s", session_id, target, exc)
+                SUBS.get(session_id, {}).update({target: alive})
+            elif SEND_WS_AUDIO and not alive:
                 logger.info("no active clients session=%s target=%s; audio dropped", session_id, target)
 
         queue.task_done()

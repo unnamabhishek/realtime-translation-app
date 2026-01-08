@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 env_path = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(env_path)
 
-MP3_PATH = os.getenv("MP3_PATH", "/Users/abhishekunnam/Projects/realtime-translation-app/audios/Keynote.mp3")
+MP3_PATH = os.getenv("MP3_PATH", "/Users/abhishekunnam/Projects/realtime-translation-app/audios/test.mp3")
 SESSION = os.getenv("SESSION_ID", "07ef71fe-5249-410e-a6e2-873777fb41cf")
 WS_URL = os.getenv("BACKEND_URL", "ws://localhost:8080/ingest")
 SAMPLE_RATE = 16000

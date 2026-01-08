@@ -10,6 +10,8 @@ dependencies = [
     "httpx",
     "azure-cognitiveservices-speech",
     "python-dotenv",
+    "numpy",
+    "sounddevice",
 ]
 
 [tool.uv]

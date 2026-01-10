@@ -10,11 +10,16 @@ AZURE_TRANSLATOR_KEY = os.getenv("AZURE_TRANSLATOR_KEY", "")
 AZURE_TRANSLATOR_ENDPOINT = os.getenv("AZURE_TRANSLATOR_ENDPOINT", "https://api.cognitive.microsofttranslator.com")
 AZURE_TRANSLATOR_REGION = os.getenv("AZURE_TRANSLATOR_REGION", "")
 DEFAULT_SOURCE_LANG = os.getenv("SOURCE_LANG", "en-US")
-TARGET_LANGS = [lang for lang in os.getenv("TARGET_LANGS", "hi-IN").split(",") if lang]
-TTS_VOICE_HI = os.getenv("TTS_VOICE_HI", "hi-IN-KavyaNeural")
-TTS_VOICE_MR = os.getenv("TTS_VOICE_MR", "mr-IN-AarohiNeural")
-VOICE_MAP = {"hi-IN": TTS_VOICE_HI, "mr-IN": TTS_VOICE_MR}
+TARGET_LANG = os.getenv("TARGET_LANG", "hi-IN")
+TTS_VOICE = os.getenv("TTS_VOICE", "hi-IN-KavyaNeural")
+VOICE_MAP = {TARGET_LANG: TTS_VOICE}
 WS_INGEST_PATH = os.getenv("WS_INGEST_PATH", "/ingest")
 WS_OUT_PATH = os.getenv("WS_OUT_PATH", "/out")
 SAMPLE_RATE = int(os.getenv("SAMPLE_RATE", "16000"))
 BYTES_PER_SAMPLE = 2
+LOCAL_TTS_PLAYBACK = os.getenv("LOCAL_TTS_PLAYBACK", "0") == "1"
+TTS_OUTPUT_DEVICE = os.getenv("TTS_OUTPUT_DEVICE", "")
+TTS_OUTPUT_CHANNELS = int(os.getenv("TTS_OUTPUT_CHANNELS", "2"))
+TTS_OUTPUT_SAMPLE_RATE = int(os.getenv("TTS_OUTPUT_SAMPLE_RATE", str(SAMPLE_RATE)))
+SEND_WS_AUDIO = os.getenv("SEND_WS_AUDIO", "1") == "1"
+TTS_RATE = os.getenv("TTS_RATE", "medium")

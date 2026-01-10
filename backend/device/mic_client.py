@@ -3,18 +3,25 @@ import json
 import uuid
 
 import numpy as np
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 import sounddevice as sd
 import websockets
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
 CHUNK = 320  # 20ms
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
 SESSION_ID = str(uuid.uuid4())
+TARGET = os.getenv("TARGET_LANG", "hi-IN")
+SOURCE = os.getenv("SOURCE_LANG", "en-US")
 
 
 async def run() -> None:
     async with websockets.connect("ws://localhost:8080/ingest") as ws:
-        await ws.send(json.dumps({"session_id": SESSION_ID, "lang_src": "en-US", "targets": ["hi-IN"]}))
+        await ws.send(json.dumps({"session_id": SESSION_ID, "lang_src": SOURCE, "target": TARGET}))
 
         def callback(indata, frames, time_info, status):
             pcm = (indata.copy() * 32767).astype("<i2").tobytes()

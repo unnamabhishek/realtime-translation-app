@@ -1,4 +1,4 @@
-FROM python:3.10-bullseye
+FROM python:3.10.22-bookworm
 
 RUN mkdir /app
 RUN mkdir /app/assets
